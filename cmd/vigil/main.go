@@ -11,6 +11,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/vandan08/vigil/internal/alert"
+	"github.com/vandan08/vigil/internal/incident"
+	"github.com/vandan08/vigil/internal/ingest"
 	"github.com/vandan08/vigil/internal/server"
 )
 
@@ -22,9 +25,11 @@ func main() {
 		port = "8080"
 	}
 
+	handler := ingest.NewHandler(log, alert.NewDeduper(5*time.Minute), incident.NewMemoryStore())
+
 	srv := &http.Server{
 		Addr:              ":" + port,
-		Handler:           server.NewMux(),
+		Handler:           server.NewMux(handler),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
