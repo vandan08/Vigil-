@@ -1,0 +1,14 @@
+# Local demo stack: Alertmanager forwards everything to Vigil's webhook.
+# Try it:   docker compose up --build   then   sh scripts/demo-alert.sh
+services:
+  vigil:
+    build: .
+    ports:
+      - "8080:8080"
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    volumes:
+      - ./deploy/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9093:9093"
