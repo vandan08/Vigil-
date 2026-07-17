@@ -104,9 +104,12 @@ evaluations of the same alert.
 
 ### 5.3 Deduplication
 
-A sliding window (default 5 min) keyed by fingerprint. Within the window, a repeat firing is
-recorded on the existing incident's timeline instead of opening a new incident. This is the
-first line of defense against alert storms; rate-limiting and grouping-by-service come later.
+A sliding window (default 5 min) keyed by fingerprint. A re-firing *inside* the window is
+dropped entirely — an alert evaluated every 30 s must not spam the timeline. A still-firing
+alert *past* the window is appended to the open incident's timeline (a periodic "still
+firing" heartbeat), and never opens a duplicate incident — the store's open-fingerprint index
+guarantees that independently of the window. This is the first line of defense against alert
+storms; rate-limiting and grouping-by-service come later.
 
 ### 5.4 Incident lifecycle
 
