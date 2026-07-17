@@ -1,7 +1,7 @@
-# binaries
+# binaries (root-anchored so cmd/vigil the package is not ignored)
 /bin/
 *.exe
-vigil
+/vigil
 
 # test & coverage output
 coverage.out
