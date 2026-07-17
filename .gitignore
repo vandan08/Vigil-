@@ -1,0 +1,17 @@
+# binaries
+/bin/
+*.exe
+vigil
+
+# test & coverage output
+coverage.out
+*.test
+
+# local env / secrets
+.env
+.env.*
+
+# editor
+.idea/
+.vscode/
+*.swp
