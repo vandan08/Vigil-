@@ -10,6 +10,7 @@ import (
 
 	"github.com/vandan08/vigil/internal/alert"
 	"github.com/vandan08/vigil/internal/incident"
+	"github.com/vandan08/vigil/internal/notify"
 )
 
 const firingPayload = `{"status":"firing","alerts":[{"status":"firing",
@@ -72,6 +73,31 @@ func TestWebhookDrivesIncidentLifecycle(t *testing.T) {
 	}
 	if incidents[0].State != incident.StateResolved {
 		t.Fatalf("incident state = %s, want resolved", incidents[0].State)
+	}
+}
+
+func TestLifecycleEventsAreEmitted(t *testing.T) {
+	now := time.Date(2026, 7, 17, 12, 0, 0, 0, time.UTC)
+	h := newTestHandler(&now)
+
+	var events []notify.Event
+	h.Notify = func(ev notify.Event) { events = append(events, ev) }
+
+	post(t, h, firingPayload)
+	now = now.Add(time.Minute)
+	post(t, h, firingPayload) // deduped: must not emit
+	now = now.Add(time.Minute)
+	post(t, h, resolvedPayload)
+
+	if len(events) != 2 {
+		t.Fatalf("emitted %d events, want 2 (opened, resolved)", len(events))
+	}
+	if events[0].Kind != notify.KindOpened || events[1].Kind != notify.KindResolved {
+		t.Fatalf("event kinds = %s, %s; want opened, resolved", events[0].Kind, events[1].Kind)
+	}
+	if events[0].Incident.ID == "" || events[0].Incident.ID != events[1].Incident.ID {
+		t.Fatalf("events must carry the same incident, got %q and %q",
+			events[0].Incident.ID, events[1].Incident.ID)
 	}
 }
 

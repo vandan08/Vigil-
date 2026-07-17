@@ -156,8 +156,12 @@ which later becomes the postmortem's raw material and the audit log.
   - [x] Dockerfile + compose demo stack (Vigil + Alertmanager)
   - [ ] Postgres persistence via sqlc (ADR-003 step 2)
   - [ ] k6 load test: alert-storm scenario, publish p99 numbers
-- [ ] **Phase 2 — Humans in the loop:** Slack app (channel per incident, ack/resolve buttons),
-      severity levels, on-call rotation-lite, SSE web timeline
+- [ ] **Phase 2 — Humans in the loop**
+  - [x] Outbound Slack notifications (incoming webhook) behind a `Notifier` seam, delivered
+        via a non-blocking bounded dispatcher (`VIGIL_SLACK_WEBHOOK_URL` to enable)
+  - [ ] Interactive Slack app: channel per incident, ack/resolve buttons
+  - [ ] Severity levels, on-call rotation-lite, SSE web timeline
+  - [ ] Notification retry with backoff (dispatcher is currently fire-once)
 - [ ] **Phase 3 — AI RCA agent:** deploy-event correlation (GitHub webhook), Loki/Prometheus
       read tools, structured diagnosis, postmortem draft, **eval suite in CI**
 - [ ] **Phase 4 — SaaS hardening:** multi-tenancy + RBAC, audit log, SLO/error budgets,
@@ -210,6 +214,13 @@ sh scripts/demo-alert.sh    # push a demo alert through Alertmanager into Vigil
 ## 12. Development log
 
 > Newest first. Honest notes — including AI-assisted work — not marketing.
+
+**2026-07-17 (evening)** — First Phase 2 slice, built in parallel with a second agent working
+the server layer (lanes in `docs/COORDINATION.md`): Slack incoming-webhook notifier behind a
+`Notifier` interface, async dispatcher with a bounded lossy queue (ingestion never blocks on
+Slack — drops are counted and logged), and incident-opened/resolved events emitted from
+ingestion. Supporting refactor: the store now returns snapshot copies from every method, so
+events are safe across goroutines. Enable with `VIGIL_SLACK_WEBHOOK_URL`.
 
 **2026-07-17** — Project start. Scaffolded repo, wrote this document and ADRs 001–003, and
 built the first vertical slice with AI pair-assistance (Claude Code): normalized alert model

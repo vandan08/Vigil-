@@ -10,6 +10,7 @@ import (
 
 	"github.com/vandan08/vigil/internal/alert"
 	"github.com/vandan08/vigil/internal/incident"
+	"github.com/vandan08/vigil/internal/notify"
 )
 
 // amWebhook mirrors the fields Vigil needs from Alertmanager's webhook
@@ -30,6 +31,10 @@ type Handler struct {
 	Dedup *alert.Deduper
 	Store incident.Store
 	Now   func() time.Time // injected so tests control the clock
+
+	// Notify, when non-nil, receives incident lifecycle events. It must not
+	// block — hand it a Dispatcher's Enqueue, not a Notifier's Send.
+	Notify func(notify.Event)
 }
 
 func NewHandler(log *slog.Logger, dedup *alert.Deduper, store incident.Store) *Handler {
@@ -64,6 +69,7 @@ func (h *Handler) Alertmanager(w http.ResponseWriter, r *http.Request) {
 			if inc, ok := h.Store.ResolveByFingerprint(fp, now); ok {
 				counts["resolved"]++
 				h.Log.Info("incident auto-resolved", "id", inc.ID, "alert", name)
+				h.emit(notify.KindResolved, inc)
 			}
 			continue
 		}
@@ -81,6 +87,7 @@ func (h *Handler) Alertmanager(w http.ResponseWriter, r *http.Request) {
 		if inc, created := h.Store.UpsertFromAlert(fp, title, severity, now); created {
 			counts["created"]++
 			h.Log.Info("incident opened", "id", inc.ID, "alert", name, "severity", severity)
+			h.emit(notify.KindOpened, inc)
 		} else {
 			counts["attached"]++
 		}
@@ -89,6 +96,16 @@ func (h *Handler) Alertmanager(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(counts)
+}
+
+// emit forwards a lifecycle event when notifications are configured. The
+// incident is already a snapshot (the store never returns live pointers),
+// so the event is safe to read from the dispatcher's goroutine.
+func (h *Handler) emit(kind notify.Kind, inc *incident.Incident) {
+	if h.Notify == nil {
+		return
+	}
+	h.Notify(notify.Event{Kind: kind, Incident: *inc})
 }
 
 // ListIncidents handles GET /api/incidents.

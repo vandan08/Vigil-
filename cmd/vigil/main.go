@@ -14,6 +14,7 @@ import (
 	"github.com/vandan08/vigil/internal/alert"
 	"github.com/vandan08/vigil/internal/incident"
 	"github.com/vandan08/vigil/internal/ingest"
+	"github.com/vandan08/vigil/internal/notify"
 	"github.com/vandan08/vigil/internal/server"
 )
 
@@ -26,6 +27,15 @@ func main() {
 	}
 
 	handler := ingest.NewHandler(log, alert.NewDeduper(5*time.Minute), incident.NewMemoryStore())
+
+	// Slack notifications are opt-in: set VIGIL_SLACK_WEBHOOK_URL to an
+	// incoming-webhook URL. Delivery is async and lossy under pressure.
+	if url := os.Getenv("VIGIL_SLACK_WEBHOOK_URL"); url != "" {
+		dispatcher := notify.NewDispatcher(log, notify.NewSlackWebhook(url), 64)
+		defer dispatcher.Close() // runs after Shutdown: drain, then exit
+		handler.Notify = dispatcher.Enqueue
+		log.Info("slack notifications enabled")
+	}
 
 	srv := &http.Server{
 		Addr:              ":" + port,
