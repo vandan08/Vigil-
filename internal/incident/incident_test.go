@@ -66,3 +66,25 @@ func TestStoreUpsertAttachResolveReopen(t *testing.T) {
 		t.Fatalf("List() must be newest-first, got %s first", first.ID)
 	}
 }
+
+func TestStoreReturnsSnapshotsNotLivePointers(t *testing.T) {
+	s := NewMemoryStore()
+
+	a, _ := s.UpsertFromAlert("fp1", "High error rate", "critical", t0)
+	if len(a.Timeline) != 1 {
+		t.Fatalf("new incident timeline = %d entries, want 1", len(a.Timeline))
+	}
+
+	// A later attach must not reach into the snapshot handed out earlier —
+	// snapshots go to loggers and the notification dispatcher's goroutine.
+	s.UpsertFromAlert("fp1", "High error rate", "critical", t0.Add(time.Minute))
+	if len(a.Timeline) != 1 {
+		t.Fatal("earlier snapshot grew when the store mutated the incident")
+	}
+
+	// Nor may a caller mutate store state through a returned incident.
+	a.Title = "tampered"
+	if s.List()[0].Title != "High error rate" {
+		t.Fatal("mutating a returned snapshot leaked into the store")
+	}
+}
