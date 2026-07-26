@@ -1,11 +1,15 @@
 package incident
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
 	"time"
 )
+
+// ErrNotFound reports a Transition against an unknown incident ID.
+var ErrNotFound = errors.New("incident not found")
 
 // Store is the persistence seam (ADR-003): domain logic is written against
 // this interface. MemoryStore serves Phase 1 and remains the test double
@@ -21,6 +25,10 @@ type Store interface {
 	// ResolveByFingerprint auto-resolves the open incident for a fingerprint,
 	// if any — the path taken when a source reports the alert as cleared.
 	ResolveByFingerprint(fingerprint string, now time.Time) (*Incident, bool)
+	// Transition moves incident id to next — the path taken when a human
+	// acks, mitigates, or resolves. Returns ErrNotFound for an unknown id;
+	// lifecycle violations surface as the state machine's error.
+	Transition(id string, next State, now time.Time) (*Incident, error)
 	// List returns all incidents, newest first.
 	List() []*Incident
 }
@@ -85,6 +93,30 @@ func (s *MemoryStore) ResolveByFingerprint(fingerprint string, now time.Time) (*
 	}
 	delete(s.openFP, fingerprint)
 	return inc.snapshot(), true
+}
+
+func (s *MemoryStore) Transition(id string, next State, now time.Time) (*Incident, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	inc, ok := s.byID[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	if err := inc.TransitionTo(next, now); err != nil {
+		return nil, err
+	}
+	// A resolved incident no longer owns its fingerprints: the same alert
+	// firing again must open a fresh incident, exactly as with
+	// ResolveByFingerprint.
+	if next == StateResolved {
+		for _, fp := range inc.Fingerprints {
+			if s.openFP[fp] == id {
+				delete(s.openFP, fp)
+			}
+		}
+	}
+	return inc.snapshot(), nil
 }
 
 func (s *MemoryStore) List() []*Incident {

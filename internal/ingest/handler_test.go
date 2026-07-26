@@ -86,18 +86,23 @@ func TestLifecycleEventsAreEmitted(t *testing.T) {
 	post(t, h, firingPayload)
 	now = now.Add(time.Minute)
 	post(t, h, firingPayload) // deduped: must not emit
+	now = now.Add(10 * time.Minute)
+	post(t, h, firingPayload) // past the window: attaches, must emit
 	now = now.Add(time.Minute)
 	post(t, h, resolvedPayload)
 
-	if len(events) != 2 {
-		t.Fatalf("emitted %d events, want 2 (opened, resolved)", len(events))
+	want := []notify.Kind{notify.KindOpened, notify.KindAttached, notify.KindResolved}
+	if len(events) != len(want) {
+		t.Fatalf("emitted %d events, want %d (%v)", len(events), len(want), want)
 	}
-	if events[0].Kind != notify.KindOpened || events[1].Kind != notify.KindResolved {
-		t.Fatalf("event kinds = %s, %s; want opened, resolved", events[0].Kind, events[1].Kind)
-	}
-	if events[0].Incident.ID == "" || events[0].Incident.ID != events[1].Incident.ID {
-		t.Fatalf("events must carry the same incident, got %q and %q",
-			events[0].Incident.ID, events[1].Incident.ID)
+	for i, kind := range want {
+		if events[i].Kind != kind {
+			t.Fatalf("event %d kind = %s, want %s", i, events[i].Kind, kind)
+		}
+		if events[i].Incident.ID != events[0].Incident.ID {
+			t.Fatalf("events must carry the same incident, got %q and %q",
+				events[0].Incident.ID, events[i].Incident.ID)
+		}
 	}
 }
 

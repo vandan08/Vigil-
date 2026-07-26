@@ -10,6 +10,7 @@ import (
 
 	"github.com/vandan08/vigil/internal/alert"
 	"github.com/vandan08/vigil/internal/incident"
+	"github.com/vandan08/vigil/internal/metrics"
 	"github.com/vandan08/vigil/internal/notify"
 )
 
@@ -35,6 +36,9 @@ type Handler struct {
 	// Notify, when non-nil, receives incident lifecycle events. It must not
 	// block — hand it a Dispatcher's Enqueue, not a Notifier's Send.
 	Notify func(notify.Event)
+
+	// Metrics, when non-nil, counts each alert's ingest outcome.
+	Metrics *metrics.Metrics
 }
 
 func NewHandler(log *slog.Logger, dedup *alert.Deduper, store incident.Store) *Handler {
@@ -90,6 +94,13 @@ func (h *Handler) Alertmanager(w http.ResponseWriter, r *http.Request) {
 			h.emit(notify.KindOpened, inc)
 		} else {
 			counts["attached"]++
+			h.emit(notify.KindAttached, inc)
+		}
+	}
+
+	if h.Metrics != nil {
+		for result, n := range counts {
+			h.Metrics.AddIngested(result, n)
 		}
 	}
 

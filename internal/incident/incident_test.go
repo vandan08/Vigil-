@@ -1,6 +1,7 @@
 package incident
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -64,6 +65,33 @@ func TestStoreUpsertAttachResolveReopen(t *testing.T) {
 	}
 	if first := s.List()[0]; first.ID != c.ID {
 		t.Fatalf("List() must be newest-first, got %s first", first.ID)
+	}
+}
+
+func TestStoreTransitionDrivesHumanLifecycle(t *testing.T) {
+	s := NewMemoryStore()
+	a, _ := s.UpsertFromAlert("fp1", "High error rate", "critical", t0)
+
+	if _, err := s.Transition("INC-9999", StateAcknowledged, t0); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unknown id: err = %v, want ErrNotFound", err)
+	}
+	if _, err := s.Transition(a.ID, StateMitigated, t0.Add(time.Minute)); err == nil {
+		t.Fatal("triggered -> mitigated must be rejected by the state machine")
+	}
+
+	acked, err := s.Transition(a.ID, StateAcknowledged, t0.Add(time.Minute))
+	if err != nil || acked.State != StateAcknowledged {
+		t.Fatalf("ack: state = %v, err = %v", acked.State, err)
+	}
+	if _, err := s.Transition(a.ID, StateResolved, t0.Add(2*time.Minute)); err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+
+	// Resolution via Transition must release the fingerprint, same as
+	// ResolveByFingerprint: the alert firing again opens a fresh incident.
+	b, created := s.UpsertFromAlert("fp1", "High error rate", "critical", t0.Add(3*time.Minute))
+	if !created || b.ID == a.ID {
+		t.Fatal("firing after Transition-resolve must open a fresh incident")
 	}
 }
 

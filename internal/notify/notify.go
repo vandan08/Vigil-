@@ -9,12 +9,17 @@ import (
 	"github.com/vandan08/vigil/internal/incident"
 )
 
-// Kind labels what happened to an incident.
+// Kind labels what happened to an incident. The full lifecycle is published;
+// each consumer decides which kinds it cares about (Slack messages on
+// opened/resolved only, the SSE dashboard feed forwards everything).
 type Kind string
 
 const (
-	KindOpened   Kind = "opened"
-	KindResolved Kind = "resolved"
+	KindOpened       Kind = "opened"
+	KindAttached     Kind = "attached"
+	KindAcknowledged Kind = "acknowledged"
+	KindMitigated    Kind = "mitigated"
+	KindResolved     Kind = "resolved"
 )
 
 // Event is one notification-worthy incident change. Incident is a snapshot

@@ -32,7 +32,9 @@ func (s *SlackWebhook) Send(ctx context.Context, ev Event) error {
 	case KindResolved:
 		text = fmt.Sprintf(":white_check_mark: *%s* resolved — %s", inc.ID, inc.Title)
 	default:
-		text = fmt.Sprintf("*%s* %s — %s", inc.ID, ev.Kind, inc.Title)
+		// Attach/ack/mitigate churn is timeline detail for the dashboard,
+		// not a message-worthy page. Only opened and resolved reach Slack.
+		return nil
 	}
 
 	body, err := json.Marshal(map[string]string{"text": text})

@@ -81,7 +81,7 @@ logic (ADR-002, ADR-003).
 | HTTP | `net/http` with Go 1.22+ method routing | No framework needed at this size; one less dependency to explain. |
 | Domain events | In-process today → NATS JetStream when async consumers arrive | Don't run a broker before there are two consumers. See ADR-002. |
 | Storage | In-memory behind `incident.Store` → Postgres + sqlc | Interface seam first, migration later. See ADR-003. |
-| Frontend (Phase 2b) | Next.js + TypeScript + Tailwind + shadcn/ui, SSE for live timeline | Market default; SSE is simpler than WebSockets for one-way updates. |
+| Frontend | Phase 2a (now): zero-dependency console embedded in the binary via `go:embed`, live over SSE (ADR-004) → Phase 2b: Next.js + TypeScript + Tailwind when auth and the RCA UI arrive | Single-binary story first; SSE is simpler than WebSockets for one-way updates; the SSE + REST contract outlives the embedded UI. |
 | AI (Phase 3) | Provider-pluggable: Ollama (default, free) / Anthropic API | Same pattern proven in AutoHawk; zero-cost by default, quality on demand. |
 | CI/CD | GitHub Actions: build, vet, test on every push | Table stakes; the AI eval suite joins this pipeline in Phase 3. |
 | Deploy target | Docker → k3s on a single VPS, Terraform, GitOps | Real Kubernetes + IaC at hobby cost. |
@@ -134,6 +134,12 @@ which later becomes the postmortem's raw material and the audit log.
 |---|---|---|
 | `POST` | `/webhooks/alertmanager` | Ingest an Alertmanager webhook payload. Returns `202` with created/updated counts. |
 | `GET` | `/api/incidents` | List incidents incl. state, severity, fingerprints, timeline. |
+| `POST` | `/api/incidents/{id}/ack` | Acknowledge. `200` with the incident; `404` unknown id; `409` invalid transition. |
+| `POST` | `/api/incidents/{id}/mitigate` | Mark impact contained. Same contract as ack. |
+| `POST` | `/api/incidents/{id}/resolve` | Resolve; releases the fingerprint so a re-fire opens a fresh incident. |
+| `GET` | `/api/events` | SSE stream: one `snapshot` event on connect, then one `incident` event per lifecycle change. |
+| `GET` | `/` | Embedded live incident console (ADR-004). |
+| `GET` | `/metrics` | Prometheus self-metrics (ADR-005): ingest outcomes, webhook latency histogram, open incidents, notification drops. |
 | `GET` | `/healthz` | Liveness. |
 
 ## 6. Engineering practices
@@ -155,12 +161,16 @@ which later becomes the postmortem's raw material and the audit log.
   - [x] Alertmanager webhook endpoint + incidents API
   - [x] Dockerfile + compose demo stack (Vigil + Alertmanager)
   - [ ] Postgres persistence via sqlc (ADR-003 step 2)
+  - [x] Prometheus self-metrics endpoint (`/metrics`, hand-rolled exposition, ADR-005) —
+        the webhook latency histogram the k6 test and the §9 SLOs read from
   - [ ] k6 load test: alert-storm scenario, publish p99 numbers
 - [ ] **Phase 2 — Humans in the loop**
   - [x] Outbound Slack notifications (incoming webhook) behind a `Notifier` seam, delivered
         via a non-blocking bounded dispatcher (`VIGIL_SLACK_WEBHOOK_URL` to enable)
+  - [x] Live web console: SSE event stream (`/api/events`) + ack/mitigate/resolve API +
+        zero-dependency dashboard embedded in the binary (ADR-004)
   - [ ] Interactive Slack app: channel per incident, ack/resolve buttons
-  - [ ] Severity levels, on-call rotation-lite, SSE web timeline
+  - [ ] Severity levels, on-call rotation-lite
   - [ ] Notification retry with backoff (dispatcher is currently fire-once)
 - [ ] **Phase 3 — AI RCA agent:** deploy-event correlation (GitHub webhook), Loki/Prometheus
       read tools, structured diagnosis, postmortem draft, **eval suite in CI**
@@ -215,6 +225,26 @@ sh scripts/demo-alert.sh    # push a demo alert through Alertmanager into Vigil
 
 > Newest first. Honest notes — including AI-assisted work — not marketing.
 
+**2026-07-18** — Self-observability (AI-built): `GET /metrics` now exposes Prometheus
+text-format metrics from a hand-rolled, stdlib-only exporter (`internal/metrics`,
+ADR-005) — ingest outcomes by result, a webhook-latency histogram with 0.5 s as an exact
+bucket boundary (the §9 p99 SLO is now measurable, not aspirational), open-incident and
+notification-drop gauges polled at scrape time via callbacks, goroutine count as the
+SSE-leak canary. The routing test now asserts a webhook POST is visible in the scrape
+end-to-end. Deliberately not client_golang: one bounded label, fixed families, swap the
+internals later without changing the scrape contract.
+
+**2026-07-17 (night)** — Live incident console (Agent A lane, AI-built): the on-call view is
+now part of the binary. A `notify.Bus` fans every lifecycle event out to SSE subscribers with
+the same never-block-ingestion stance as the dispatcher — a client that falls behind is
+dropped and auto-resyncs on reconnect (snapshot-then-deltas protocol). New action API makes
+`acknowledged`/`mitigated` reachable for the first time (`POST /api/incidents/{id}/ack|
+mitigate|resolve`, validated by the state machine, `409` on races). The dashboard itself is
+three static files, `go:embed`-ed, no framework/CDN/fonts — `go build` stays the whole
+toolchain (ADR-004). Full suite green under `-race`; verified end-to-end in a browser against
+the compose stack. Lifecycle kinds grew to opened/attached/acknowledged/mitigated/resolved;
+Slack deliberately messages only on opened/resolved.
+
 **2026-07-17 (evening)** — First Phase 2 slice, built in parallel with a second agent working
 the server layer (lanes in `docs/COORDINATION.md`): Slack incoming-webhook notifier behind a
 `Notifier` interface, async dispatcher with a bounded lossy queue (ingestion never blocks on
@@ -236,3 +266,5 @@ Postgres persistence and the k6 alert-storm load test.
 | [ADR-001](docs/adr/ADR-001-go-stdlib-core.md) | Go with a stdlib-only core |
 | [ADR-002](docs/adr/ADR-002-event-pipeline.md) | In-process events now, NATS JetStream later |
 | [ADR-003](docs/adr/ADR-003-storage.md) | In-memory store behind an interface, then Postgres |
+| [ADR-004](docs/adr/ADR-004-embedded-dashboard.md) | Embedded zero-dependency dashboard over SSE |
+| [ADR-005](docs/adr/ADR-005-self-observability.md) | Hand-rolled Prometheus exposition for self-metrics |

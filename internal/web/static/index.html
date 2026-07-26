@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VIGIL — Incident Console</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1 15 14H1Z' fill='none' stroke='%233ee08c' stroke-width='1.5'/%3E%3Ccircle cx='8' cy='10.5' r='1.6' fill='%233ee08c'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="scanlines" aria-hidden="true"></div>
+
+  <header class="masthead">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M8 1 15 14H1Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <circle cx="8" cy="10.5" r="1.6" fill="currentColor"/>
+      </svg>
+      <h1>VIGIL<span class="brand-sub">// incident console</span></h1>
+    </div>
+    <div class="feed" role="status">
+      <span class="feed-dot" id="feed-dot"></span>
+      <span id="feed-label">CONNECTING</span>
+    </div>
+  </header>
+
+  <section class="board-meta">
+    <dl class="tally" id="tally">
+      <div class="tally-cell" data-count="triggered"><dt>TRIGGERED</dt><dd>0</dd></div>
+      <div class="tally-cell" data-count="acknowledged"><dt>ACK'D</dt><dd>0</dd></div>
+      <div class="tally-cell" data-count="mitigated"><dt>MITIGATED</dt><dd>0</dd></div>
+      <div class="tally-cell" data-count="resolved"><dt>RESOLVED</dt><dd>0</dd></div>
+    </dl>
+    <div class="board-clock" id="clock" aria-hidden="true">--:--:--</div>
+  </section>
+
+  <main>
+    <ol class="strips" id="strips"></ol>
+    <div class="all-quiet" id="all-quiet" hidden>
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M8 1 15 14H1Z" fill="none" stroke="currentColor" stroke-width=".8"/>
+        <circle cx="8" cy="10.5" r="1.6" fill="currentColor"/>
+      </svg>
+      <p>ALL QUIET</p>
+      <p class="all-quiet-sub">no incidents on the board — the feed is live</p>
+    </div>
+  </main>
+
+  <template id="strip-template">
+    <li class="strip">
+      <div class="strip-head">
+        <span class="strip-id"></span>
+        <span class="strip-sev"></span>
+        <span class="strip-state"></span>
+        <span class="strip-title"></span>
+        <span class="strip-age" title=""></span>
+        <span class="strip-actions"></span>
+        <button class="strip-toggle" aria-expanded="false">TIMELINE</button>
+      </div>
+      <div class="strip-timeline" hidden>
+        <ol class="timeline"></ol>
+      </div>
+    </li>
+  </template>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

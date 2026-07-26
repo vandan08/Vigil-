@@ -36,6 +36,19 @@ func TestSlackWebhookSendsFormattedMessage(t *testing.T) {
 	}
 }
 
+func TestSlackWebhookSkipsTimelineDetailKinds(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("no HTTP call expected for timeline-detail kinds")
+	}))
+	defer srv.Close()
+
+	for _, kind := range []Kind{KindAttached, KindAcknowledged, KindMitigated} {
+		if err := NewSlackWebhook(srv.URL).Send(context.Background(), Event{Kind: kind, Incident: testIncident()}); err != nil {
+			t.Fatalf("Send(%s): %v, want silent skip", kind, err)
+		}
+	}
+}
+
 func TestSlackWebhookErrorsOnNon2xx(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no_service", http.StatusNotFound)

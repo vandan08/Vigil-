@@ -12,8 +12,9 @@ the roadmap, always with a human in the loop.
 
 ## Status
 
-Early development — Phase 1 (alert ingestion → incident lifecycle) is in progress.
-See the [roadmap](Development.md#7-roadmap) for what exists today vs. what is planned.
+Early development — Phase 1 (alert ingestion → incident lifecycle) is done; Phase 2
+(humans in the loop) is in progress. See the [roadmap](Development.md#7-roadmap) for what
+exists today vs. what is planned.
 
 ## What works today
 
@@ -22,7 +23,13 @@ See the [roadmap](Development.md#7-roadmap) for what exists today vs. what is pl
 - Dedup window so a re-firing alert doesn't open a duplicate incident
 - Incident state machine (`triggered → acknowledged → mitigated → resolved`) with an
   append-only timeline of everything that happened
+- **Live incident console at `/`** — embedded in the binary (no Node, no CDN), updates over
+  SSE, with ack/mitigate/resolve buttons (see [ADR-004](docs/adr/ADR-004-embedded-dashboard.md))
+- `POST /api/incidents/{id}/ack|mitigate|resolve` — lifecycle actions, validated by the
+  state machine
+- `GET /api/events` — SSE stream: snapshot on connect, then one event per lifecycle change
 - `GET /api/incidents` — list incidents with their timelines
+- Slack notifications on incident opened/resolved (opt-in: set `VIGIL_SLACK_WEBHOOK_URL`)
 - `GET /healthz` — liveness
 
 ## Quickstart
@@ -38,6 +45,8 @@ curl -s -X POST localhost:8080/webhooks/alertmanager \
 curl -s localhost:8080/api/incidents | python -m json.tool
 ```
 
+Then open <http://localhost:8080/> to watch the incident land on the live console.
+
 Or run the local demo stack (Vigil + Alertmanager wired together):
 
 ```sh
@@ -50,7 +59,11 @@ sh scripts/demo-alert.sh      # pushes an alert into Alertmanager -> webhooks in
 ```
  Alertmanager ──webhook──▶ ingest ──normalize+fingerprint──▶ dedup ──▶ incident store
                                                                           │
-                              REST API  ◀── incidents + timelines ────────┘
+                 REST API + actions  ◀── incidents + timelines ───────────┤
+                                                                          │ lifecycle events
+                                                          ┌───────────────┴──────────────┐
+                                                  live console (SSE,             Slack webhook
+                                                  embedded at /)                 (opt-in)
 ```
 
 Design decisions are recorded as ADRs in [docs/adr](docs/adr).
